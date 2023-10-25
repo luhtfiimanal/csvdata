@@ -20,11 +20,11 @@ The function takes one parameter:
 
 The `CsvAggregateConfigs` object has the following fields:
 
-- `FileNamingFormat`: A `string` defining the file naming format of the csv files. The file naming format must be in Golang time format. The file naming format must contain the year, month and day. The file naming format must be absolute path.
-- `FileFrequency`: A `string` defining the frequency of the csv files. The file frequency must be in Golang time format. The file frequency must contain the year, month and day.
+- `FileNamingFormat`: A `string` defining the file naming format of the csv files. The file naming format must be in Golang time format. The file naming format must contain the year, month and day. The file naming format must be absolute path. Example of file naming format: `/path/to/example/2006/01/2006-01-02.csv`
+- `FileFrequency`: A `string` defining the frequency of the csv files. The file frequency must be in Golang time duration string format. Example `24h` for daily csv files.
 - `Requests`: A `[]RequestColumn` defining the requests to be made to the csv files. The `RequestColumn` object has the following fields:
   - `InputColumnName`: A `string` defining the input column name of the csv file.
-  - `OutputColumnName`: A `string` defining the output column name of the csv file.
+  - `OutputColumnName`: A `string` defining the output column that will be presented in the map output.
   - `Method`: A `string` defining the method to be used for the aggregation. The accepted string values are:
     - "sum": Summation
     - "count": Count
@@ -33,17 +33,14 @@ The `CsvAggregateConfigs` object has the following fields:
     - "min": Minimum
     - "first": First
     - "last": Last
-- `EpochOffset`: An `int64` defining the epoch offset of the csv files.
-- `StartTime`: A `time.Time` object defining the start time of the aggregation.
-- `EndTime`: A `time.Time` object defining the end time of the aggregation.
+- `EpochOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `EpochOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
+- `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
+- `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
 - `TimePrecision`: A `string` defining the time precision of the aggregation. The accepted string values are:
-  - "year": Year
-  - "month": Month
-  - "day": Day
-  - "hour": Hour
-  - "minute": Minute
   - "second": Second
-- `AggWindow`: A `string` defining the aggregation window of the aggregation. The aggregation window must be in Golang time format. The aggregation window must contain the year, month and day.
+  - "microsecond": Microsecond
+  - "millisecond": Millisecond
+- `AggWindow`: A `string` defining the aggregation window of the aggregation. The aggregation window must be in Golang time duration string format. Example `24h` for daily aggregation window or `1h` for hourly aggregation window.
 
 ### Returns
 

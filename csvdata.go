@@ -75,7 +75,8 @@ type CsvAggregateConfigs struct {
 	FileFrequency    string
 	FileFrequencyDur time.Duration
 	Requests         []RequestColumn
-	EpochOffset      time.Duration
+	EpochOffset      string
+	EpochOffsetDur   time.Duration
 	StartTime        time.Time
 	EndTime          time.Time
 	TimePrecision    string
@@ -86,14 +87,6 @@ type CsvAggregateConfigs struct {
 // cheker function to check if the configs are valid
 func (cfg *CsvAggregateConfigs) Check(caller string) error {
 	var err error
-	// Get information about the parent directory
-	// fstat, err := os.Stat(cfg.Parentfolder)
-	// if os.IsNotExist(err) {
-	// 	return fmt.Errorf("parent directory %s does not exist", cfg.Parentfolder)
-	// }
-	// if !fstat.IsDir() {
-	// 	return fmt.Errorf("parent directory %s is not a directory", cfg.Parentfolder)
-	// }
 
 	cfg.FileFrequencyDur, err = time.ParseDuration(cfg.FileFrequency)
 	if err != nil {
@@ -112,6 +105,12 @@ func (cfg *CsvAggregateConfigs) Check(caller string) error {
 	case MILLI:
 	default:
 		return fmt.Errorf("time precision %s is not valid", cfg.TimePrecision)
+	}
+
+	// check offset
+	cfg.EpochOffsetDur, err = time.ParseDuration(cfg.EpochOffset)
+	if err != nil {
+		return fmt.Errorf("epoch offset %s is not valid", cfg.EpochOffset)
 	}
 
 	if caller == "table" {
