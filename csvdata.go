@@ -3,6 +3,7 @@ package csvdata
 import (
 	"encoding/csv"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -54,6 +55,24 @@ func TimetoEpoch(t time.Time, precission string) (int64, error) {
 	}
 }
 
+// function to convert time duration to epoch
+func DurationtoEpoch(ds string, precission string) (int64, error) {
+	d, err := time.ParseDuration(ds)
+	if err != nil {
+		return int64(math.NaN()), err
+	}
+	switch precission {
+	case SECOND:
+		return int64(d.Seconds()), nil
+	case MICRO:
+		return int64(d.Microseconds()), nil
+	case MILLI:
+		return int64(d.Milliseconds()), nil
+	default:
+		return int64(d.Seconds()), nil
+	}
+}
+
 func IsBetween[T constraints.Ordered](a, b, c T) bool {
 	if a <= b {
 		return c >= a && c <= b
@@ -76,7 +95,7 @@ type CsvAggregateConfigs struct {
 	FileFrequencyDur time.Duration
 	Requests         []RequestColumn
 	EpochOffset      string
-	EpochOffsetDur   time.Duration
+	EpochOffsetEp    int64
 	StartTime        time.Time
 	EndTime          time.Time
 	TimePrecision    string
@@ -88,9 +107,13 @@ type CsvAggregateConfigs struct {
 func (cfg *CsvAggregateConfigs) Check(caller string) error {
 	var err error
 
-	cfg.FileFrequencyDur, err = time.ParseDuration(cfg.FileFrequency)
-	if err != nil {
-		return fmt.Errorf("file frequency %s is not valid", cfg.FileFrequency)
+	if cfg.FileFrequency == "" {
+		return fmt.Errorf("file frequency is not set")
+	} else {
+		cfg.FileFrequencyDur, err = time.ParseDuration(cfg.FileFrequency)
+		if err != nil {
+			return fmt.Errorf("file frequency %s is not valid", cfg.FileFrequency)
+		}
 	}
 
 	// check if cfg.StartTime is before cfg.EndTime
@@ -108,17 +131,25 @@ func (cfg *CsvAggregateConfigs) Check(caller string) error {
 	}
 
 	// check offset
-	cfg.EpochOffsetDur, err = time.ParseDuration(cfg.EpochOffset)
-	if err != nil {
-		return fmt.Errorf("epoch offset %s is not valid", cfg.EpochOffset)
+	if cfg.EpochOffset == "" {
+		cfg.EpochOffsetEp = 0
+	} else {
+		cfg.EpochOffsetEp, err = DurationtoEpoch(cfg.EpochOffset, cfg.TimePrecision)
+		if err != nil {
+			return fmt.Errorf("epoch offset %s is not valid", cfg.EpochOffset)
+		}
 	}
 
 	if caller == "table" {
 		// check if cfg.AggWindow is valid
 		// try to parse duration
-		cfg.AggWindowDur, err = time.ParseDuration(cfg.AggWindow)
-		if err != nil {
-			return fmt.Errorf("aggregation window %s is not valid", cfg.AggWindow)
+		if cfg.AggWindow == "" {
+			return fmt.Errorf("aggregation window is not set")
+		} else {
+			cfg.AggWindowDur, err = time.ParseDuration(cfg.AggWindow)
+			if err != nil {
+				return fmt.Errorf("aggregation window %s is not valid", cfg.AggWindow)
+			}
 		}
 	}
 	return nil
@@ -203,6 +234,9 @@ func CsvAggregatePoint(cfg CsvAggregateConfigs) (map[string]float64, error) {
 			if err != nil {
 				continue
 			}
+
+			// add offset
+			epochiter += cfg.EpochOffsetEp
 
 			// check if the epoch is within
 			if !IsBetween(startTimeEpoch, endTimeEpoch, epochiter) {
