@@ -12,15 +12,20 @@ const (
 	MIN   = "min"
 	LAST  = "last"
 	FIRST = "first"
+	PICK  = "pick"
 )
 
 func NewAggregator(agg string) *Aggregator {
-	return &Aggregator{
+	aggret := &Aggregator{
 		Agg: agg,
-		// Column: column,
-		Data: make(chan Input, 3),
-		Done: make(chan result),
 	}
+
+	aggret.Reset()
+	return aggret
+}
+
+type PickerDate struct {
+	PickEpoch int64
 }
 
 type Aggregator struct {
@@ -28,6 +33,7 @@ type Aggregator struct {
 	// Column string
 	Data chan Input
 	Done chan result
+	*PickerDate
 }
 
 type Input struct {
@@ -55,6 +61,8 @@ func (a *Aggregator) Do() {
 		a.doLast()
 	case FIRST:
 		a.doFirst()
+	case PICK:
+		a.doPick()
 	}
 }
 
@@ -104,6 +112,22 @@ func (a *Aggregator) doLast() {
 	close(a.Done)
 }
 
+func (a *Aggregator) doPick() {
+	// pick nearest value from the picker date
+	var pick float64
+	var pickepochdist int64
+	pickepochdist = math.MaxInt64
+	for val := range a.Data {
+		epochdist := int64(math.Abs(float64(val.Epoch - a.PickEpoch)))
+		if epochdist < pickepochdist {
+			pickepochdist = epochdist
+			pick = val.Value
+		}
+	}
+	a.Done <- result{Value: pick}
+	close(a.Done)
+}
+
 func (a *Aggregator) doFirst() {
 	var first float64
 	var firstepoch int64
@@ -134,4 +158,10 @@ func (a *Aggregator) doCount() {
 	}
 	a.Done <- result{Value: float64(count)}
 	close(a.Done)
+}
+
+func (a *Aggregator) Reset() {
+	a.Data = make(chan Input, 3) // reinitialize the Data channel
+	a.Done = make(chan result)   // reinitialize the Done channel
+	go a.Do()
 }

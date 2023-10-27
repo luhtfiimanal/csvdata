@@ -33,9 +33,11 @@ The `CsvAggregateConfigs` object has the following fields:
     - "min": Minimum
     - "first": First
     - "last": Last
-- `EpochOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `EpochOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
-- `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
-- `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
+    - "pick": Pick (Pick the value at a specific time)
+  - `PickTime`: A `time.Time` object defining the time to be picked if the `Method` is "pick". Local time is UTC + `TimeOffset`.
+- `TimeOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `TimeOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
+- `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
+- `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
 - `TimePrecision`: A `string` defining the time precision of the aggregation. The accepted string values are:
   - "second": Second
   - "microsecond": Microsecond
@@ -54,20 +56,20 @@ Here is a usage example of `CsvAggregatePoint` function:
 import "github.com/luhtfiimanal/csvdata"
 
 func main() {
-  cfg := csvdata.CsvAggregateConfigs{
-    FileNamingFormat: "/home/devawos/dev/meteocsv/example/2006-01-02.csv",
-    FileFrequency:    "24h",
-    Requests: []csvdata.RequestColumn{
-      {InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
-      {InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_max", Method: csvdata.MAX},
-      {InputColumnName: "ev_water_level_avg_60", OutputColumnName: "water_level", Method: csvdata.MEAN},
-    },
-    EpochOffset:   0,
-    StartTime:     time.Date(2023, 1, 10, 0, 0, 0, 0, time.UTC),
-    EndTime:       time.Date(2023, 1, 11, 0, 0, 0, 0, time.UTC),
-    TimePrecision: "second",
-    AggWindow:     "1h",
-  }
+	cfg := csvdata.CsvAggregateConfigs{
+		FileNamingFormat: "./example/2006-01-02.csv",
+		FileFrequency:    "24h",
+		Requests: []csvdata.RequestColumn{
+			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
+			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_max", Method: csvdata.MAX},
+			{InputColumnName: "ev_water_level_avg_60", OutputColumnName: "water_level", Method: csvdata.MEAN},
+			{InputColumnName: "ev_water_level_avg_60", OutputColumnName: "water_level_pick", Method: csvdata.PICK, PickTime: time.Date(2023, 1, 10, 3, 0, 0, 0, time.UTC)},
+		},
+		TimeOffset:    "7h",
+		StartTime:     time.Date(2023, 1, 10, 1, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2023, 1, 11, 0, 0, 0, 0, time.UTC),
+		TimePrecision: "second",
+	}
 
   agg, err := csvdata.CsvAggregatePoint(cfg)
   if err != nil {
@@ -75,6 +77,12 @@ func main() {
   }
   fmt.Println(agg)
 }
+```
+
+This will output:
+
+```go
+map[dewpoint_avg:23.243294117647054 dewpoint_max:24.63 water_level:51.1048775710088 water_level_pick:53.79]
 ```
 
 ## `GetNearestPastTimeUnit` Function
@@ -138,29 +146,30 @@ The output is the closest past hour from the time "2022-01-02T01:44:12Z".
 ## Bencmark
 This is the benchmark result of the script. The benchmark is done on a 4 core 16GB RAM machine.
 ```go
-goos: linux
+goos: windows
 goarch: amd64
 pkg: github.com/luhtfiimanal/csvdata
-cpu: Intel(R) Xeon(R) Bronze 3204 CPU @ 1.90GHz
-BenchmarkAggregator5Number/Mean-6          	1000000000	         0.0000260 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregator5Number/Max-6           	1000000000	         0.0000134 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregator5Number/Min-6           	1000000000	         0.0000149 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregator5Number/First-6         	1000000000	         0.0000194 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregator5Number/Last-6          	1000000000	         0.0000187 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Sum-6          	1000000000	         0.008420 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Count-6        	1000000000	         0.008290 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Mean-6         	1000000000	         0.008646 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Max-6          	1000000000	         0.008687 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Min-6          	1000000000	         0.008664 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/First-6        	1000000000	         0.008466 ns/op	       0 B/op	       0 allocs/op
-BenchmarkAggregatorThousand/Last-6         	1000000000	         0.008690 ns/op	       0 B/op	       0 allocs/op
-BenchmarkReadCSVLineByLine-6               	     126	   9290296 ns/op	 1648463 B/op	    2910 allocs/op
-BenchmarkReadCSVAllAtOnce-6                	     128	   9439474 ns/op	 1775413 B/op	    2923 allocs/op
-BenchmarkReadCSVSequentiallyAllAtOnce-6    	      12	  95738186 ns/op	17721998 B/op	   29209 allocs/op
-BenchmarkReadCSVConcurrentlyAllAtOnce-6    	      34	  34780653 ns/op	17721476 B/op	   29218 allocs/op
-BenchmarkReadCSVConcurrentlyLineByLine-6   	      49	  24273194 ns/op	16452236 B/op	   29091 allocs/op
+cpu: 12th Gen Intel(R) Core(TM) i7-1260P
+BenchmarkAggregator5Number/Mean-16           	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Max-16            	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Min-16            	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/First-16          	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Last-16           	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Sum-16           	1000000000	         0.001557 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Count-16         	1000000000	         0.001550 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Mean-16          	1000000000	         0.002056 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Max-16           	1000000000	         0.001538 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Min-16           	1000000000	         0.002106 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/First-16         	1000000000	         0.001572 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Last-16          	1000000000	       0 B/op	       0 allocs/op
+BenchmarkCsvAggregatePoint-16                	     325	   3979880 ns/op	 1650674 B/op	    2938 allocs/op
+BenchmarkReadCSVLineByLine-16                	     429	   3445539 ns/op	 1648881 B/op	    2910 allocs/op
+BenchmarkReadCSVAllAtOnce-16                 	     292	   3855106 ns/op	 1775838 B/op	    2924 allocs/op
+BenchmarkReadCSVSequentiallyAllAtOnce-16     	     175	   7068973 ns/op	 3528036 B/op	    5808 allocs/op
+BenchmarkReadCSVConcurrentlyAllAtOnce-16     	     316	   4515772 ns/op	 3527322 B/op	    5810 allocs/op
+BenchmarkReadCSVConcurrentlyLineByLine-16    	     460	   4147446 ns/op	 3273157 B/op	    5783 allocs/op
 PASS
-coverage: 100.0% of statements
-ok  	github.com/luhtfiimanal/csvdata	8.384s
+coverage: 57.2% of statements
+ok  	github.com/luhtfiimanal/csvdata	11.305s
 ```
 

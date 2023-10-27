@@ -38,7 +38,6 @@ func TestAggregator(t *testing.T) {
 				}
 				close(agg.Data)
 			}()
-			go agg.Do()
 			result := <-agg.Done
 			if result.Value != tt.want {
 				t.Errorf("got %v, want %v", result.Value, tt.want)
@@ -57,7 +56,6 @@ func TestLast(t *testing.T) {
 		agg.Data <- csvdata.Input{Epoch: 4, Value: 4.0}
 		close(agg.Data)
 	}()
-	go agg.Do()
 	result := <-agg.Done
 	if result.Value != 5.0 {
 		t.Errorf("got %v, want %v", result.Value, 5.0)
@@ -74,7 +72,6 @@ func TestFirst(t *testing.T) {
 		agg.Data <- csvdata.Input{Epoch: 4, Value: 4.0}
 		close(agg.Data)
 	}()
-	go agg.Do()
 	result := <-agg.Done
 	if result.Value != 1.0 {
 		t.Errorf("got %v, want %v", result.Value, 1.0)
@@ -111,7 +108,6 @@ func BenchmarkAggregator5Number(b *testing.B) {
 				}
 				close(agg.Data)
 			}()
-			go agg.Do()
 			result := <-agg.Done
 			if result.Value != tt.want {
 				b.Errorf("got %v, want %v", result.Value, tt.want)
@@ -147,7 +143,6 @@ func BenchmarkAggregatorThousand(t *testing.B) {
 				}
 				close(agg.Data)
 			}()
-			go agg.Do()
 			<-agg.Done
 		})
 	}
