@@ -33,9 +33,9 @@ The `CsvAggregateConfigs` object has the following fields:
     - "min": Minimum
     - "first": First
     - "last": Last
-- `EpochOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `EpochOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
-- `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
-- `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `EpochOffset`.
+- `TimeOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `TimeOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
+- `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
+- `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
 - `TimePrecision`: A `string` defining the time precision of the aggregation. The accepted string values are:
   - "second": Second
   - "microsecond": Microsecond

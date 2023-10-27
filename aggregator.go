@@ -15,12 +15,12 @@ const (
 )
 
 func NewAggregator(agg string) *Aggregator {
-	return &Aggregator{
+	aggret := &Aggregator{
 		Agg: agg,
-		// Column: column,
-		Data: make(chan Input, 3),
-		Done: make(chan result),
 	}
+
+	aggret.Reset()
+	return aggret
 }
 
 type Aggregator struct {
@@ -134,4 +134,10 @@ func (a *Aggregator) doCount() {
 	}
 	a.Done <- result{Value: float64(count)}
 	close(a.Done)
+}
+
+func (a *Aggregator) Reset() {
+	a.Data = make(chan Input, 3) // reinitialize the Data channel
+	a.Done = make(chan result)   // reinitialize the Done channel
+	go a.Do()
 }
