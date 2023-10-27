@@ -12,6 +12,7 @@ const (
 	MIN   = "min"
 	LAST  = "last"
 	FIRST = "first"
+	PICK  = "pick"
 )
 
 func NewAggregator(agg string) *Aggregator {
@@ -23,11 +24,16 @@ func NewAggregator(agg string) *Aggregator {
 	return aggret
 }
 
+type PickerDate struct {
+	PickEpoch int64
+}
+
 type Aggregator struct {
 	Agg string
 	// Column string
 	Data chan Input
 	Done chan result
+	*PickerDate
 }
 
 type Input struct {
@@ -55,6 +61,8 @@ func (a *Aggregator) Do() {
 		a.doLast()
 	case FIRST:
 		a.doFirst()
+	case PICK:
+		a.doPick()
 	}
 }
 
@@ -101,6 +109,22 @@ func (a *Aggregator) doLast() {
 		}
 	}
 	a.Done <- result{Value: last}
+	close(a.Done)
+}
+
+func (a *Aggregator) doPick() {
+	// pick nearest value from the picker date
+	var pick float64
+	var pickepochdist int64
+	pickepochdist = math.MaxInt64
+	for val := range a.Data {
+		epochdist := int64(math.Abs(float64(val.Epoch - a.PickEpoch)))
+		if epochdist < pickepochdist {
+			pickepochdist = epochdist
+			pick = val.Value
+		}
+	}
+	a.Done <- result{Value: pick}
 	close(a.Done)
 }
 

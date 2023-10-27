@@ -15,6 +15,7 @@ type RequestColumn struct {
 	InputColumnName  string
 	OutputColumnName string
 	Method           string
+	PickTime         time.Time
 }
 
 const (
@@ -273,6 +274,14 @@ func CsvAggregatePoint(cfg CsvAggregateConfigs) (map[string]float64, error) {
 	aggmap := make(map[string]*Aggregator, len(cfg.Requests))
 	for _, req := range cfg.Requests {
 		aggmap[req.OutputColumnName] = NewAggregator(req.Method)
+		if req.Method == PICK {
+			pickTimeEp, err := TimetoEpoch(req.PickTime, cfg.TimePrecision)
+			if err != nil {
+				return nil, err
+			}
+			pickTimeEp += cfg.TimeOffsetEp
+			aggmap[req.OutputColumnName].PickerDate = &PickerDate{PickEpoch: pickTimeEp}
+		}
 	}
 
 	// loop through the fdates
