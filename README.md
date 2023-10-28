@@ -1,5 +1,56 @@
 # README
 
+This is a Golang script to read and aggregate data from csv files.
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Constants](#constants)
+- API
+  - Main Functions
+    - [CsvAggregatePoint Function](#csvaggregatepoint-function)
+  - Helper Functions
+    - [GetNearestPastTimeUnit Function](#getnearestpasttimeunit-function)
+- [Benchmarks](#benchmarks)
+
+## Installation
+
+To install the script, run the following command:
+
+```bash
+go get github.com/luhtfiimanal/csvdata
+```
+
+## Usage
+
+To use the script, import the script in your Golang script:
+
+```go
+import "github.com/luhtfiimanal/csvdata"
+```
+
+## Constants
+
+The script has the following constants:
+
+### Aggregation Methods
+
+- `SUM`: A `string` constant defining the summation method.
+- `COUNT`: A `string` constant defining the count method.
+- `MEAN`: A `string` constant defining the mean method.
+- `MAX`: A `string` constant defining the maximum method.
+- `MIN`: A `string` constant defining the minimum method.
+- `FIRST`: A `string` constant defining the first method.
+- `LAST`: A `string` constant defining the last method.
+- `PICK`: A `string` constant defining the pick method.
+
+### Time Precision
+
+- `SECOND`: A `string` constant defining the second time precision.
+- `MICROSECOND`: A `string` constant defining the microsecond time precision.
+- `MILLISECOND`: A `string` constant defining the millisecond time precision.
+
 ## `CsvAggregatePoint` Function
 
 This is example use of `CsvAggregatePoint` function. The function will aggregate the data from the csv file based on the configuration provided.
@@ -25,23 +76,12 @@ The `CsvAggregateConfigs` object has the following fields:
 - `Requests`: A `[]RequestColumn` defining the requests to be made to the csv files. The `RequestColumn` object has the following fields:
   - `InputColumnName`: A `string` defining the input column name of the csv file.
   - `OutputColumnName`: A `string` defining the output column that will be presented in the map output.
-  - `Method`: A `string` defining the method to be used for the aggregation. The accepted string values are:
-    - "sum": Summation
-    - "count": Count
-    - "mean": Mean
-    - "max": Maximum
-    - "min": Minimum
-    - "first": First
-    - "last": Last
-    - "pick": Pick (Pick the value at a specific time)
+  - `Method`: A `string` defining the method to be used for the aggregation. The value accepted are discussed in the [Aggregation Methods](#aggregation-methods) section.
   - `PickTime`: A `time.Time` object defining the time to be picked if the `Method` is "pick". Local time is UTC + `TimeOffset`.
 - `TimeOffset`: An `string` defining the epoch offset for the `StartTime`, `EndTime` and output time. `TimeOffset` must be in Golang time duration string format. Example `24m00s` for 24 minutes epoch offset.
 - `StartTime`: A `time.Time` object defining the start time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
 - `EndTime`: A `time.Time` object defining the end time of the aggregation, in local time. Local time is UTC + `TimeOffset`.
-- `TimePrecision`: A `string` defining the time precision of the aggregation. The accepted string values are:
-  - "second": Second
-  - "microsecond": Microsecond
-  - "millisecond": Millisecond
+- `TimePrecision`: A `string` defining the time precision of the aggregation. The value accepted are discussed in the [Time Precision](#time-precision) section.
 - `AggWindow`: A `string` defining the aggregation window of the aggregation. The aggregation window must be in Golang time duration string format. Example `24h` for daily aggregation window or `1h` for hourly aggregation window.
 
 ### Returns
@@ -143,8 +183,10 @@ Nearest Past 1 hour: 2022-01-02 01:00:00 +0000 UTC
 The output is the closest past hour from the time "2022-01-02T01:44:12Z".
 
 
-## Bencmark
-This is the benchmark result of the script. The benchmark is done on a 4 core 16GB RAM machine.
+## Benchmarks
+
+This is the benchmark result of the script. The benchmark is done on a laptop with i7 - 4 core 16GB RAM machine.
+
 ```go
 goos: windows
 goarch: amd64
@@ -172,4 +214,32 @@ PASS
 coverage: 57.2% of statements
 ok  	github.com/luhtfiimanal/csvdata	11.305s
 ```
+This is the benchmark result of the script. The benchmark is done on a PC with i7-10700F - 8 core 16GB RAM machine.
 
+```go
+goos: windows
+goarch: amd64
+pkg: github.com/luhtfiimanal/csvdata
+cpu: Intel(R) Core(TM) i7-10700F CPU @ 2.90GHz
+BenchmarkAggregator5Number/Mean-16           	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Max-16            	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Min-16            	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/First-16          	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregator5Number/Last-16           	1000000000	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Sum-16           	1000000000	         0.001545 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Count-16         	1000000000	         0.001028 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Mean-16          	1000000000	         0.001545 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Max-16           	1000000000	         0.001544 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Min-16           	1000000000	         0.0009926 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/First-16         	1000000000	         0.001000 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAggregatorThousand/Last-16          	1000000000	         0.001000 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCsvAggregatePoint-16                	     357	   3334911 ns/op	 1651464 B/op	    2938 allocs/op
+BenchmarkReadCSVLineByLine-16                	     567	   2158189 ns/op	 1648887 B/op	    2910 allocs/op
+BenchmarkReadCSVAllAtOnce-16                 	     537	   2269073 ns/op	 1775831 B/op	    2923 allocs/op
+BenchmarkReadCSVSequentiallyAllAtOnce-16     	     271	   4548520 ns/op	 3528055 B/op	    5808 allocs/op
+BenchmarkReadCSVConcurrentlyAllAtOnce-16     	     458	   2627590 ns/op	 3527309 B/op	    5810 allocs/op
+BenchmarkReadCSVConcurrentlyLineByLine-16    	     512	   2338535 ns/op	 3273235 B/op	    5784 allocs/op
+PASS
+coverage: 57.2% of statements
+ok  	github.com/luhtfiimanal/csvdata	9.284s
+```
