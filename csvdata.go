@@ -232,12 +232,6 @@ func CsvAggregateTable(cfg CsvAggregateConfigs) (map[string][]float64, error) {
 
 }
 
-func resetaggregators(aggmap *map[string]*Aggregator) {
-	for _, agg := range *aggmap {
-		agg.Reset()
-	}
-}
-
 // CsvAggregatePoint aggregates a single point in time
 func CsvAggregatePoint(cfg CsvAggregateConfigs) (map[string]float64, error) {
 
