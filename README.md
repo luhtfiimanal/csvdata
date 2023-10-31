@@ -53,11 +53,18 @@ The function will return a `map[string]float64` object representing the aggregat
 Here is a usage example of `CsvAggregatePoint` function:
 
 ```go
-import "github.com/luhtfiimanal/csvdata"
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/luhtfiimanal/csvdata"
+)
 
 func main() {
 	cfg := csvdata.CsvAggregateConfigs{
-		FileNamingFormat: "./example/2006-01-02.csv",
+		FileNamingFormat: "../../example/2006-01-02.csv",
 		FileFrequency:    "24h",
 		Requests: []csvdata.RequestColumn{
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
@@ -71,11 +78,11 @@ func main() {
 		TimePrecision: "second",
 	}
 
-  agg, err := csvdata.CsvAggregatePoint(cfg)
-  if err != nil {
-    t.Error(err)
-  }
-  fmt.Println(agg)
+	agg, err := csvdata.CsvAggregatePoint(cfg)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(agg)
 }
 ```
 
