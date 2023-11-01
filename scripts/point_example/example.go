@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	cfg := csvdata.CsvAggregateConfigs{
+	cfg := csvdata.CsvAggregatePointConfigs{
 		FileNamingFormat: "../../example/2006-01-02.csv",
 		FileFrequency:    "24h",
 		Requests: []csvdata.RequestColumn{
