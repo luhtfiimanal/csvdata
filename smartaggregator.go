@@ -282,59 +282,89 @@ channelloop:
 }
 
 func (sa *SmartAggregator) doPick() {
-	var lennow int64 = math.MaxInt64
-	var leniter int64 = math.MaxInt64
-	var leniterabs int64 = math.MaxInt64
-	var leniternext int64 = math.MaxInt64
+	// mmake all result nan
+	for i := range sa.Column.Result {
+		sa.Column.Result[i] = math.NaN()
+	}
+	var lenlast float64 = math.MaxFloat64
+	var leniter float64 = math.MaxFloat64
+	// var leniterabs int64 = math.MaxInt64
+	// var leniternext int64 = math.MaxInt64
 	var pick float64 = math.NaN()
-	var pickenow int64
-	var pickenext int64
-	var i int
+	var pickenow float64
+	var pickenext float64
+	var pseudoWindow0 float64
+	var pseudoWindow1 float64
 
-outerloop:
-	for i, pickenow = range sa.Column.PickRelative {
+	pickprocess := func(i int) {
+		pickenow = float64(sa.Column.PickRelative[i])
 		// get next pick epoch
 		if i+1 < len(sa.Column.PickRelative) {
-			pickenext = sa.Column.PickRelative[i+1]
+			pickenext = float64(sa.Column.PickRelative[i+1])
+			pseudoWindow0 = pseudoWindow1
+			pseudoWindow1 = float64(pickenext+pickenow) / 2
 		} else {
 			pickenext = math.MaxInt64
+			pseudoWindow0 = pseudoWindow1
+			pseudoWindow1 = math.MaxInt64
+		}
+		pick = math.NaN()
+		lenlast = math.MaxFloat64
+	}
+
+	picki := 0
+	// get next pick epoch
+	pickprocess(picki)
+
+channelloop:
+	for {
+		val, ok := <-sa.Data
+		if !ok {
+			// save the last pick
+			sa.Column.Result[picki] = pick
+			break channelloop
 		}
 
-	channelloop:
-		for {
-			val, ok := <-sa.Data
-			if !ok {
-				// save the last pick
-				sa.Column.Result[i] = pick
-				// break outerloop
-				break outerloop
-			}
+		epochi := float64(val.Epoch)
 
-			// len check
-			leniter = val.Epoch - pickenow
-			leniterabs = int64(math.Abs(float64(leniter)))
-			leniternext = int64(math.Abs(float64(val.Epoch - pickenext)))
+		// check if the epoch is within the window
+		if epochi >= pseudoWindow0 && epochi <= pseudoWindow1 {
+
+			// len check, len is absolute value of the difference between the epoch and the pick epoch
+			leniter = math.Abs(epochi - pickenow)
 
 			// if leniter is 0 pick the value and break channel loop
 			if leniter == 0 {
-				sa.Column.Result[i] = val.Value
-				pick = 0
-				lennow = math.MaxInt64
-				break channelloop
+				sa.Column.Result[picki] = val.Value
+				// move to the next pick
+				picki++
+				if picki >= len(sa.Column.PickRelative) {
+					break channelloop
+				}
+				pickprocess(picki)
+				// reset values
+				lenlast = math.MaxFloat64
+				leniter = math.MaxFloat64
+				pick = math.NaN()
+				continue channelloop
 			}
 
-			// if leniter is smaller than leniternext, and leniter is positive, the point is closer to the next pick, so save the pick, and break the channel loop
-			if leniterabs > leniternext && leniter > 0 {
-				sa.Column.Result[i] = pick
+			// if leniter is smaller than lenlast, save the pick
+			if leniter < lenlast {
 				pick = val.Value
-				lennow = leniterabs
-				break channelloop
+				lenlast = leniter
 			}
 
-			// if the leniter is smaller than lennow, save the pick
-			if leniterabs < lennow {
-				pick = val.Value
-				lennow = leniterabs
+		} else if epochi > pseudoWindow1 {
+			// save the last pick
+			sa.Column.Result[picki] = pick
+			// move until the epoch is in the window
+			for epochi > pseudoWindow1 {
+				picki++
+				if picki >= len(sa.Column.PickRelative) {
+					break channelloop
+				}
+				pickprocess(picki)
 			}
 		}
 	}
