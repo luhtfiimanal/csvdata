@@ -54,6 +54,12 @@ func (sa *SmartAggregator) Do(wg *sync.WaitGroup) {
 }
 
 func (sa *SmartAggregator) doSumCountMean(agg string) {
+	// mmake all result nan
+	if agg == SUM || agg == MEAN {
+		for i := range sa.Column.Result {
+			sa.Column.Result[i] = math.NaN()
+		}
+	}
 	var sum float64
 	var count float64
 
@@ -77,48 +83,54 @@ func (sa *SmartAggregator) doSumCountMean(agg string) {
 		}
 	}
 
-	// loop trough the window
-outerloop:
-	for i, window := range sa.Column.WindowRelative {
-		// listen to the data
-	channelloop:
-		for {
-			val, ok := <-sa.Data
-			// check if channel is closed
-			if !ok {
-				savefunc(i)
-				// break the outer loop
-				break outerloop
-			}
+	windowi := 0
+	window := sa.Column.WindowRelative[windowi]
 
+channelloop:
+	for {
+		val, ok := <-sa.Data
+		// check if channel is closed
+		if !ok {
+			savefunc(windowi)
+			// break the outer loop
+			break channelloop
+		}
+
+		// check if the data is in the window
+		if val.Epoch >= window[0] && val.Epoch <= window[1] {
+			// add the value to the sum
+			sum += val.Value
+			count++
+		} else if val.Epoch > window[1] {
+			// remember the value
+			savefunc(windowi)
+			// loop through the windows until the epoch is less than the window[1]
+			for val.Epoch > window[1] {
+				windowi++
+				if windowi >= len(sa.Column.WindowRelative) {
+					break channelloop
+				}
+				window = sa.Column.WindowRelative[windowi]
+			}
 			// check if the data is in the window
 			if val.Epoch >= window[0] && val.Epoch <= window[1] {
 				// add the value to the sum
-				sum += val.Value
-				count++
-			} else if val.Epoch > window[1] {
-				// remember the value
-				savefunc(i)
-				// check if the epoch is in the next window
-				if i+1 < len(sa.Column.WindowRelative) {
-					if val.Epoch >= sa.Column.WindowRelative[i+1][0] && val.Epoch <= sa.Column.WindowRelative[i+1][1] {
-						// if in the next window, remember the value
-						sum = val.Value
-						count = 1
-					} else {
-						// if not in the next window, reset the sum and count
-						sum = 0
-						count = 0
-					}
-				}
-				// break the channel loop
-				break channelloop
+				sum = val.Value
+				count = 1
+			} else {
+				// reset the sum and count
+				sum = 0
+				count = 0
 			}
 		}
 	}
 }
 
 func (sa *SmartAggregator) doMinMax(minMax string) {
+	// mmake all result nan
+	for i := range sa.Column.Result {
+		sa.Column.Result[i] = math.NaN()
+	}
 	var result float64
 	if minMax == "min" {
 		result = math.MaxFloat64
@@ -135,49 +147,53 @@ func (sa *SmartAggregator) doMinMax(minMax string) {
 		}
 	}
 
-	// loop through the window
-outerloop:
-	for i, window := range sa.Column.WindowRelative {
-		// listen to the data
-	channelloop:
-		for {
-			val, ok := <-sa.Data
-			// check if channel is closed
-			if !ok {
-				savefunc(i)
-				// break the outer loop
-				break outerloop
-			}
+	windowi := 0
+	window := sa.Column.WindowRelative[windowi]
 
+channelloop:
+	for {
+		val, ok := <-sa.Data
+		// check if channel is closed
+		if !ok {
+			savefunc(windowi)
+			// break the outer loop
+			break channelloop
+		}
+
+		// check if the data is in the window
+		if val.Epoch >= window[0] && val.Epoch <= window[1] {
+			// process the min or max
+			if minMax == "min" && val.Value < result {
+				result = val.Value
+			} else if minMax == "max" && val.Value > result {
+				result = val.Value
+			}
+		} else if val.Epoch > window[1] {
+			// remember the value
+			savefunc(windowi)
+
+			// loop through the windows until the epoch is less than the window[1]
+			for val.Epoch > window[1] {
+				windowi++
+				if windowi >= len(sa.Column.WindowRelative) {
+					break channelloop
+				}
+				window = sa.Column.WindowRelative[windowi]
+			}
 			// check if the data is in the window
 			if val.Epoch >= window[0] && val.Epoch <= window[1] {
-				// process the min or max
-				if minMax == "min" && val.Value < result {
-					result = val.Value
-				} else if minMax == "max" && val.Value > result {
-					result = val.Value
+				// add the value to the sum
+				result = val.Value
+			} else {
+				// if not in the next window, reset the max or min
+				if minMax == "min" {
+					result = math.MaxFloat64
+				} else if minMax == "max" {
+					result = -math.MaxFloat64
 				}
-			} else if val.Epoch > window[1] {
-				// remember the value
-				savefunc(i)
-				// check if the epoch is in the next window
-				if i+1 < len(sa.Column.WindowRelative) {
-					if val.Epoch >= sa.Column.WindowRelative[i+1][0] && val.Epoch <= sa.Column.WindowRelative[i+1][1] {
-						// if in the next window, remember the value
-						result = val.Value
-					} else {
-						// if not in the next window, reset the max or min
-						if minMax == "min" {
-							result = math.MaxFloat64
-						} else if minMax == "max" {
-							result = -math.MaxFloat64
-						}
-					}
-				}
-				// break the channel loop
-				break channelloop
 			}
 		}
+
 	}
 }
 
