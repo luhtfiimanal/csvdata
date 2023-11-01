@@ -90,7 +90,7 @@ func findString(slice []string, val string) int {
 	return -1 // return -1 if the string is not found
 }
 
-type CsvAggregateConfigs struct {
+type CsvAggregatePointConfigs struct {
 	FileNamingFormat string
 	FileFrequency    string
 	FileFrequencyDur time.Duration
@@ -101,9 +101,6 @@ type CsvAggregateConfigs struct {
 	StartTime        time.Time
 	EndTime          time.Time
 	TimePrecision    string
-	AggWindow        string
-	AggWindowDur     time.Duration
-	AggWindowEp      int64
 }
 
 // function to check if string inside []string
@@ -117,7 +114,7 @@ func StringInSlice(a string, list []string) bool {
 }
 
 // cheker function to check if the configs are valid
-func (cfg *CsvAggregateConfigs) Check(caller string) error {
+func (cfg *CsvAggregatePointConfigs) Check() error {
 	var err error
 
 	if !StringInSlice(cfg.FileFrequency, []string{"1y", "1M", "7d", "2d", "1d", "24h", "12h", "6h", "3h", "1h", "15m", "10m", "5m", "1m"}) {
@@ -157,92 +154,20 @@ func (cfg *CsvAggregateConfigs) Check(caller string) error {
 		}
 	}
 
-	if caller == "table" {
-		// check if cfg.AggWindow is valid
-		// try to parse duration
-		if !StringInSlice(cfg.AggWindow, []string{"1y", "1M", "7d", "2d", "1d", "12h", "6h", "3h", "1h", "15m", "10m", "5m", "1m"}) {
-			return fmt.Errorf("AggWindow must be \"1y\", \"1M\", \"7d\", \"2d\", \"1d\", \"12h\", \"6h\", \"3h\", \"1h\", \"15m\", \"10m\", \"5m\", \"1m\"")
-		} else {
-			cfg.AggWindowEp, err = DurationtoEpoch(cfg.AggWindow, cfg.TimePrecision)
-			if err != nil {
-				return fmt.Errorf("AggWindow epoch %s is not valid", cfg.AggWindow)
-			}
-			cfg.AggWindowDur, err = time.ParseDuration(cfg.AggWindow)
-			if err != nil {
-				return fmt.Errorf("AggWindow window %s is not valid", cfg.AggWindow)
-			}
-		}
-	}
 	return nil
 }
 
 // CsvAggregateTable aggregates a table of data
-func CsvAggregateTable(cfg CsvAggregateConfigs) (map[string][]float64, error) {
-
-	// check if configs are valid
-	err := cfg.Check("table")
-	if err != nil {
-		return nil, err
-	}
-
-	endTimeEpoch, err := TimetoEpoch(cfg.EndTime, cfg.TimePrecision)
-	if err != nil {
-		return nil, err
-	}
-
-	// get the list of epoch, use cfg.AggWindowDur
-	startIterDate := GetNearestPastTimeUnit(cfg.StartTime, cfg.AggWindow)
-	startIterDateEpoch, _ := TimetoEpoch(startIterDate, cfg.TimePrecision)
-	startResultDate := startIterDate.Add(time.Duration(cfg.AggWindowDur))
-	startResultDateEpoch, _ := TimetoEpoch(startResultDate, cfg.TimePrecision)
-	epochlist := []int64{}
-	for i := startResultDateEpoch; i <= endTimeEpoch; i += int64(cfg.AggWindowEp) {
-		epochlist = append(epochlist, i)
-	}
-
-	// startTimeUTC os the start time in UTC, Starttime minus offset
-	startTimeUTC := startIterDate.Add(-cfg.TimeOffsetDur)
-	startDateFile := GetNearestPastTimeUnit(startTimeUTC, cfg.FileFrequency)
-	endTimeUTC := cfg.EndTime.Add(-cfg.TimeOffsetDur)
-	endDateFile := GetNearestPastTimeUnit(endTimeUTC, cfg.FileFrequency).Add(time.Duration(cfg.FileFrequencyDur))
-
-	fmt.Println(startIterDateEpoch)
-
-	// get the list of files dates
-	fdates := []time.Time{}
-	for d := startDateFile; d.Before(endDateFile); d = d.Add(time.Duration(cfg.FileFrequencyDur)) {
-		fdates = append(fdates, d)
-	}
-
-	// prepare for aggregation
-	retmap := make(map[string][]float64, len(cfg.Requests))
-	for _, req := range cfg.Requests {
-		retmap[req.OutputColumnName] = make([]float64, len(epochlist))
-	}
-	// coli := make(map[string]int, len(cfg.Requests))
-	aggmap := make(map[string]*Aggregator, len(cfg.Requests))
-	for _, req := range cfg.Requests {
-		aggmap[req.OutputColumnName] = NewAggregator(req.Method)
-	}
-
-	// initial idate
-	// idate :=
+func CsvAggregateTable() (map[string][]float64, error) {
 
 	return nil, nil
-
-}
-
-func resetaggregators(aggmap *map[string]*Aggregator) {
-	for _, agg := range *aggmap {
-		agg.Reset()
-	}
 }
 
 // CsvAggregatePoint aggregates a single point in time
-func CsvAggregatePoint(cfg CsvAggregateConfigs) (map[string]float64, error) {
+func CsvAggregatePoint(cfg CsvAggregatePointConfigs) (map[string]float64, error) {
 
 	// check if configs are valid
-	err := cfg.Check("point")
+	err := cfg.Check()
 	if err != nil {
 		return nil, err
 	}
