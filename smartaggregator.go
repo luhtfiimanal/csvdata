@@ -1,8 +1,14 @@
 package csvdata
 
 import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
 	"math"
+	"os"
+	"strconv"
 	"sync"
+	"time"
 )
 
 type SmartAggregator struct {
@@ -14,9 +20,33 @@ type SmartAggregator struct {
 type SAColumn struct {
 	OutputColumnName string
 	TimeResultEp     *[]int64
+	PickRelativeEp   int64
 	PickRelative     []int64
+	WindowRelativeEp [2]int64
 	WindowRelative   [][2]int64
 	Result           []float64
+}
+
+func (sac *SAColumn) makeWindow() {
+	// check if WindowRelative is not set
+	if len(sac.WindowRelative) == 0 {
+		// if WindowRelativeEp is set, make WindowRelative based on relative with TimeResultEp
+		sac.WindowRelative = make([][2]int64, len(*sac.TimeResultEp))
+		for i, v := range *sac.TimeResultEp {
+			sac.WindowRelative[i] = [2]int64{v + sac.WindowRelativeEp[0], v + sac.WindowRelativeEp[1]}
+		}
+	}
+}
+
+func (sac *SAColumn) makePickRelative() {
+	// check if PickRelative is not set
+	if len(sac.PickRelative) == 0 {
+		// if PickRelativeEp is set, make PickRelative based on relative with TimeResultEp
+		sac.PickRelative = make([]int64, len(*sac.TimeResultEp))
+		for i, v := range *sac.TimeResultEp {
+			sac.PickRelative[i] = v + sac.PickRelativeEp
+		}
+	}
 }
 
 func NewSmartAggregator(agg string, col *SAColumn, wg *sync.WaitGroup) *SmartAggregator {
@@ -35,24 +65,31 @@ func (sa *SmartAggregator) Do(wg *sync.WaitGroup) {
 	defer wg.Done()
 	switch sa.Agg {
 	case SUM:
+		sa.Column.makeWindow()
 		sa.doSumCountMean(sa.Agg)
 	case COUNT:
+		sa.Column.makeWindow()
 		sa.doSumCountMean(sa.Agg)
 	case MEAN:
+		sa.Column.makeWindow()
 		sa.doSumCountMean(sa.Agg)
 	case MAX:
+		sa.Column.makeWindow()
 		sa.doMinMax(sa.Agg)
 	case MIN:
+		sa.Column.makeWindow()
 		sa.doMinMax(sa.Agg)
 	case FIRST:
+		sa.Column.makeWindow()
 		sa.doFirst()
 	case LAST:
+		sa.Column.makeWindow()
 		sa.doLast()
 	case PICK:
+		sa.Column.makePickRelative()
 		sa.doPick()
 	}
 }
-
 func (sa *SmartAggregator) doSumCountMean(agg string) {
 	// mmake all result nan
 	if agg == SUM || agg == MEAN {
@@ -368,4 +405,133 @@ channelloop:
 			}
 		}
 	}
+}
+
+// FUNCTIONS
+// THIS IS THE MAIN MAP OF WORKING SMARTAGGREGATOR
+// Working map of SmartAggregator
+type SAMap map[string]*SmartAggregator
+
+func (sm SAMap) SAMapToStruct(timePrecision string) SAResult {
+	var timeResultEp *[]int64
+	resultMap := make(Columns)
+	for _, v := range sm {
+		if timeResultEp == nil {
+			timeResultEp = v.Column.TimeResultEp
+		}
+		resultMap[v.Column.OutputColumnName] = &v.Column.Result
+	}
+
+	// convert timeResultEp to time.Time
+	timeResult := make([]time.Time, len(*timeResultEp))
+	for i, v := range *timeResultEp {
+		timeResult[i] = EpochtoTime(v, timePrecision)
+	}
+	return SAResult{
+		Columns:   resultMap,
+		TimeStamp: &timeResult,
+	}
+}
+
+// OUTPUT OF SMARTAGGREGATOR
+// Output map of SmartAggregator
+type Columns map[string]*[]float64
+
+type SAResult struct {
+	Columns
+	Requests  *[]RequestColumnTable // it is necessary to save the request when we need to convert it to csv, because without it the order of the columns will be random
+	TimeStamp *[]time.Time
+}
+
+// SaveToCSV saves the SAResult to a csv file
+func (result SAResult) SaveToCSV(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Writing the header
+	headers := []string{"timeResultEp"}
+	for i := range *result.Requests {
+		colname := (*result.Requests)[i].OutputColumnName
+		headers = append(headers, colname)
+	}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
+
+	// Writing values
+	for idx, dte := range *result.TimeStamp {
+		line := make([]string, len(result.Columns)+1)
+		line[0] = dte.UTC().Format(time.DateTime)
+
+		col := 1
+		for col < len(line) {
+			// get value from the column using header
+			colname := headers[col]
+			resValues := result.Columns[colname]
+			if idx < len(*resValues) {
+				line[col] = strconv.FormatFloat((*resValues)[idx], 'f', -1, 64)
+			} else {
+				line[col] = ""
+			}
+			col++
+		}
+		if err := writer.Write(line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// JSON5 output of SAResult
+func (result SAResult) ToJson5() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"Columns":{`)
+
+	// Write results
+	first := true
+	for key, arr := range result.Columns {
+		if !first {
+			buf.WriteString(",")
+		}
+		first = false
+
+		buf.WriteString(fmt.Sprintf(`"%s":[`, key))
+		for i, val := range *arr {
+			if i != 0 {
+				buf.WriteString(",")
+			}
+
+			switch {
+			case math.IsNaN(val):
+				buf.WriteString(`NaN`)
+			case math.IsInf(val, 1):
+				buf.WriteString(`Infinity`)
+			case math.IsInf(val, -1):
+				buf.WriteString(`-Infinity`)
+			default:
+				buf.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
+			}
+		}
+		buf.WriteString("]")
+	}
+
+	buf.WriteString(`},"Time":[`)
+
+	// Write time results
+	for i, dte := range *result.TimeStamp {
+		if i != 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(fmt.Sprintf("\"%s\"", dte.UTC().Format("2006-01-02T15:04:05")))
+	}
+
+	buf.WriteString("]}")
+
+	return buf.Bytes(), nil
 }

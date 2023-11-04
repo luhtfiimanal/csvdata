@@ -1,6 +1,79 @@
 package csvdata
 
-import "time"
+import (
+	"math"
+	"time"
+)
+
+const (
+	SECOND = "second"
+	MICRO  = "microsecond"
+	MILLI  = "millisecond"
+)
+
+// function to convert epoch to time
+func EpochtoTime(epoch int64, precission string) time.Time {
+	switch precission {
+	case SECOND:
+		dtn := time.Unix(epoch, 0)
+		return dtn
+	case MICRO:
+		dtn := time.UnixMicro(epoch)
+		return dtn
+	case MILLI:
+		dtn := time.UnixMilli(epoch)
+		return dtn
+	default:
+		dtn := time.Unix(epoch, 0)
+		return dtn
+	}
+}
+
+// function to convert time to epoch
+func TimetoEpoch(t time.Time, precission string) int64 {
+	switch precission {
+	case SECOND:
+		return t.Unix()
+	case MICRO:
+		return t.UnixMicro()
+	case MILLI:
+		return t.UnixMilli()
+	default:
+		return t.Unix()
+	}
+}
+
+// function to convert epoch to time duration
+func EpochToDuration(epoch int64, precision string) time.Duration {
+	switch precision {
+	case "SECOND":
+		return time.Duration(epoch) * time.Second
+	case "MICRO":
+		return time.Duration(epoch) * time.Microsecond
+	case "MILLI":
+		return time.Duration(epoch) * time.Millisecond
+	default:
+		return time.Duration(epoch) * time.Second
+	}
+}
+
+// function to convert time duration to epoch
+func DurationtoEpoch(ds string, precission string) (int64, error) {
+	d, err := time.ParseDuration(ds)
+	if err != nil {
+		return int64(math.NaN()), err
+	}
+	switch precission {
+	case SECOND:
+		return int64(d.Seconds()), nil
+	case MICRO:
+		return int64(d.Microseconds()), nil
+	case MILLI:
+		return int64(d.Milliseconds()), nil
+	default:
+		return int64(d.Seconds()), nil
+	}
+}
 
 func GetNearestPastTimeUnit(t time.Time, duration string) time.Time {
 	switch duration {

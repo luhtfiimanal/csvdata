@@ -9,8 +9,10 @@ import (
 
 func main() {
 	cfg := csvdata.CsvAggregatePointConfigs{
-		FileNamingFormat: "../../example/2006-01-02.csv",
-		FileFrequency:    "24h",
+		FileConfig: csvdata.FileConfig{
+			FileNamingFormat: "./example/2006-01-02.csv",
+			FileFrequency:    "24h",
+		},
 		Requests: []csvdata.RequestColumn{
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_max", Method: csvdata.MAX},
