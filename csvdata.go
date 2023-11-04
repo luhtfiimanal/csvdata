@@ -442,10 +442,6 @@ func CsvAggregateTable(cfg CsvAggregateTableConfigs) (SAResult, error) {
 	wg.Wait()
 
 	// generate SAOutput
-	resvalue := make(map[string][]float64, len(cfg.Requests))
-	for _, req := range cfg.Requests {
-		resvalue[req.OutputColumnName] = samap[req.OutputColumnName].Column.Result
-	}
 	sares := samap.SAMapToStruct(cfg.TimePrecision)
 	sares.Requests = &cfg.Requests
 
