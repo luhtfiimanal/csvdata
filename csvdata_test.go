@@ -2,6 +2,7 @@ package csvdata_test
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -10,8 +11,10 @@ import (
 
 func TestCsvAggregatePoint(t *testing.T) {
 	cfg := csvdata.CsvAggregatePointConfigs{
-		FileNamingFormat: "./example/2006-01-02.csv",
-		FileFrequency:    "24h",
+		FileConfig: csvdata.FileConfig{
+			FileNamingFormat: "./example/2006-01-02.csv",
+			FileFrequency:    "24h",
+		},
 		Requests: []csvdata.RequestColumn{
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_max", Method: csvdata.MAX},
@@ -49,8 +52,10 @@ func TestCsvAggregatePoint(t *testing.T) {
 
 func TestCsvAggregatePoint_Pick(t *testing.T) {
 	cfg := csvdata.CsvAggregatePointConfigs{
-		FileNamingFormat: "./example/2006-01-02.csv",
-		FileFrequency:    "24h",
+		FileConfig: csvdata.FileConfig{
+			FileNamingFormat: "./example/2006-01-02.csv",
+			FileFrequency:    "24h",
+		},
 		Requests: []csvdata.RequestColumn{
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint", Method: csvdata.PICK, PickTime: time.Date(2023, 1, 10, 3, 0, 0, 0, time.UTC)},
 		},
@@ -75,13 +80,71 @@ func TestCsvAggregatePoint_Pick(t *testing.T) {
 }
 
 func TestCsvAggregateTable(t *testing.T) {
+	cfg := csvdata.CsvAggregateTableConfigs{
+		FileConfigs: []csvdata.FileConfig{
+			{
+				FileNamingFormat: "C:\\Users\\luthf\\Downloads\\Archive/2006-01-02.csv",
+				FileFrequency:    "24h",
+			},
+		},
+		Requests: []csvdata.RequestColumnTable{
+			{
+				InputColumnName:  "dewpoint_avg_60",
+				OutputColumnName: "dewpoint_avg",
+				Method:           csvdata.MEAN,
+				WindowString:     "1h_2h",
+			},
+			{
+				InputColumnName:  "ev_water_temperature_avg_60",
+				OutputColumnName: "wtemp_max_yesterday",
+				Method:           csvdata.MAX,
+				WindowString:     "-23h59m59s_0h",
+			},
+			{
+				InputColumnName:  "ev_water_temperature_avg_60",
+				OutputColumnName: "wtemp_min_yesterday",
+				Method:           csvdata.MIN,
+				WindowString:     "-23h59m59s_0h",
+			},
+			{
+				InputColumnName:  "ev_water_temperature_avg_60",
+				OutputColumnName: "wtemp_min_7LT_to_13LT",
+				Method:           csvdata.MIN,
+				WindowString:     "7h_13h",
+			},
+		},
+		TimeOffset:    "6h30m", //"6h30m",
+		StartTime:     time.Date(2023, 1, 3, 0, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2023, 1, 3, 12, 0, 0, 0, time.UTC),
+		TimePrecision: "second",
+		AggWindow:     "24h", //"24h"
+	}
+
+	result, err := csvdata.CsvAggregateTable(cfg)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	result.SaveToCSV("./example/out.csv")
+	// test if file is exist
+	if _, err := os.Stat("./example/out.csv"); os.IsNotExist(err) {
+		t.Error(err)
+		return
+	}
+
+	// test convert byte to json
+	jsonout, _ := result.ToJson5()
+	fmt.Println(string(jsonout))
 }
 
 // benchmarking
 func BenchmarkCsvAggregatePoint(b *testing.B) {
 	cfg := csvdata.CsvAggregatePointConfigs{
-		FileNamingFormat: "./example/2006-01-02.csv",
-		FileFrequency:    "24h",
+		FileConfig: csvdata.FileConfig{
+			FileNamingFormat: "./example/2006-01-02.csv",
+			FileFrequency:    "24h",
+		},
 		Requests: []csvdata.RequestColumn{
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_avg", Method: csvdata.MEAN},
 			{InputColumnName: "dewpoint_avg_60", OutputColumnName: "dewpoint_max", Method: csvdata.MAX},
