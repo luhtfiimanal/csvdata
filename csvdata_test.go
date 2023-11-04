@@ -115,12 +115,10 @@ func TestCsvAggregateTable(t *testing.T) {
 		},
 		TimeOffset:    "6h30m", //"6h30m",
 		StartTime:     time.Date(2023, 1, 3, 0, 0, 0, 0, time.UTC),
-		EndTime:       time.Date(2023, 1, 4, 0, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2023, 1, 3, 12, 0, 0, 0, time.UTC),
 		TimePrecision: "second",
 		AggWindow:     "24h", //"24h"
 	}
-
-	// known bug. Ketika end time tidak sama dengan aggregate window, maka akan terjadi stuck di goroutine
 
 	result, err := csvdata.CsvAggregateTable(cfg)
 	if err != nil {

@@ -355,79 +355,80 @@ func CsvAggregateTable(cfg CsvAggregateTableConfigs) (SAResult, error) {
 			for d := startDateFile; d.Before(endDateFile); d = d.Add(time.Duration(filec.FileFrequencyDur)) {
 				fdates = append(fdates, d)
 			}
+
 			// loop through the fdates
-		dayloop:
 			for _, day := range fdates {
-				// file name for the day
-				filename := day.Format(filec.FileNamingFormat)
+				func() {
+					// file name for the day
+					filename := day.Format(filec.FileNamingFormat)
 
-				// read the file
-				csvfile, err := os.Open(filename)
-				if err != nil {
-					csvfile.Close()
-					continue dayloop
-				}
-
-				// read the file
-				reader := csv.NewReader(csvfile)
-
-				// get the column name
-				csvColNames, err := reader.Read()
-				if err != nil {
-					csvfile.Close()
-					continue dayloop
-				}
-				for _, req := range cfg.Requests {
-					coli[req.InputColumnName] = findString(csvColNames, req.InputColumnName)
-				}
-
-				// loop through the file
-			readloop:
-				for {
-					// read the line
-					line, err := reader.Read()
+					// read the file
+					csvfile, err := os.Open(filename)
 					if err != nil {
-						break readloop
+						csvfile.Close()
+						return
+					}
+					defer csvfile.Close()
+
+					// read the file
+					reader := csv.NewReader(csvfile)
+
+					// get the column name
+					csvColNames, err := reader.Read()
+					if err != nil {
+						csvfile.Close()
+						return
+					}
+					for _, req := range cfg.Requests {
+						coli[req.InputColumnName] = findString(csvColNames, req.InputColumnName)
 					}
 
-					// convert date
-					epochiter, err := strconv.ParseInt(line[0], 10, 64)
-					if err != nil {
-						continue readloop
-					}
-
-					// add offset
-					epochiter += cfg.TimeOffsetEp
-
-					// check if the epoch is within
-					if !IsBetween(startREADEpoch, endREADEpoch, epochiter) {
-						// check if the epoch is after the endREADEpoch
-						if epochiter > endREADEpoch {
+					// loop through the file
+				readloop:
+					for {
+						// read the line
+						line, err := reader.Read()
+						if err != nil {
 							break readloop
 						}
-						continue readloop
-					}
 
-					// aggregate
-				reqloop:
-					for _, req := range cfg.Requests {
-						inpcolname := req.InputColumnName
-						colidx, ok := coli[inpcolname]
-						if !ok {
-							continue reqloop
-						}
-						datastr := line[colidx]
-						dataiter, err := strconv.ParseFloat(datastr, 64)
+						// convert date
+						epochiter, err := strconv.ParseInt(line[0], 10, 64)
 						if err != nil {
-							continue reqloop
+							continue readloop
 						}
-						samap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
+
+						// add offset
+						epochiter += cfg.TimeOffsetEp
+
+						// check if the epoch is within
+						if !IsBetween(startREADEpoch, endREADEpoch, epochiter) {
+							// check if the epoch is after the endREADEpoch
+							if epochiter > endREADEpoch {
+								break readloop
+							}
+							continue readloop
+						}
+
+						// aggregate
+					reqloop:
+						for _, req := range cfg.Requests {
+							inpcolname := req.InputColumnName
+							colidx, ok := coli[inpcolname]
+							if !ok {
+								continue reqloop
+							}
+							datastr := line[colidx]
+							dataiter, err := strconv.ParseFloat(datastr, 64)
+							if err != nil {
+								continue reqloop
+							}
+							samap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
+						}
 					}
-				}
 
-				csvfile.Close()
+				}()
 			}
-
 		}(&filec)
 	}
 
@@ -490,65 +491,66 @@ func CsvAggregatePoint(cfg CsvAggregatePointConfigs) (map[string]float64, error)
 
 	// loop through the fdates
 	for _, day := range fdates {
-		// file name for the day
-		filename := day.Format(cfg.FileNamingFormat)
+		func() {
+			// file name for the day
+			filename := day.Format(cfg.FileNamingFormat)
 
-		// read the file
-		csvfile, err := os.Open(filename)
-		if err != nil {
-			csvfile.Close()
-			continue
-		}
-
-		// read the file
-		reader := csv.NewReader(csvfile)
-
-		// get the column name
-		csvColNames, err := reader.Read()
-		if err != nil {
-			csvfile.Close()
-			continue
-		}
-		for _, req := range cfg.Requests {
-			coli[req.InputColumnName] = findString(csvColNames, req.InputColumnName)
-		}
-
-		// loop through the file
-		for {
-			// read the line
-			line, err := reader.Read()
+			// read the file
+			csvfile, err := os.Open(filename)
 			if err != nil {
-				break
+				csvfile.Close()
+				return
 			}
+			defer csvfile.Close()
 
-			// convert date
-			epochiter, err := strconv.ParseInt(line[0], 10, 64)
+			// read the file
+			reader := csv.NewReader(csvfile)
+
+			// get the column name
+			csvColNames, err := reader.Read()
 			if err != nil {
-				continue
+				csvfile.Close()
+				return
 			}
-
-			// add offset
-			epochiter += cfg.TimeOffsetEp
-
-			// check if the epoch is within
-			if !IsBetween(startTimeEpoch, endTimeEpoch, epochiter) {
-				continue
-			}
-
-			// aggregate
 			for _, req := range cfg.Requests {
-				inpcolname := req.InputColumnName
-				colidx := coli[inpcolname]
-				datastr := line[colidx]
-				dataiter, err := strconv.ParseFloat(datastr, 64)
+				coli[req.InputColumnName] = findString(csvColNames, req.InputColumnName)
+			}
+
+			// loop through the file
+			for {
+				// read the line
+				line, err := reader.Read()
+				if err != nil {
+					return
+				}
+
+				// convert date
+				epochiter, err := strconv.ParseInt(line[0], 10, 64)
 				if err != nil {
 					continue
 				}
-				aggmap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
-			}
-		}
 
-		csvfile.Close()
+				// add offset
+				epochiter += cfg.TimeOffsetEp
+
+				// check if the epoch is within
+				if !IsBetween(startTimeEpoch, endTimeEpoch, epochiter) {
+					continue
+				}
+
+				// aggregate
+				for _, req := range cfg.Requests {
+					inpcolname := req.InputColumnName
+					colidx := coli[inpcolname]
+					datastr := line[colidx]
+					dataiter, err := strconv.ParseFloat(datastr, 64)
+					if err != nil {
+						continue
+					}
+					aggmap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
+				}
+			}
+		}()
 	}
 
 	// work done close all the aggregator

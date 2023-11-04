@@ -49,6 +49,11 @@ func (sac *SAColumn) makePickRelative() {
 	}
 }
 
+func (sa *SmartAggregator) drainChannel() {
+	for range sa.Data {
+	}
+}
+
 func NewSmartAggregator(agg string, col *SAColumn, wg *sync.WaitGroup) *SmartAggregator {
 	sa := &SmartAggregator{
 		Agg:    agg,
@@ -161,6 +166,8 @@ channelloop:
 			}
 		}
 	}
+	// drain the channel
+	sa.drainChannel()
 }
 
 func (sa *SmartAggregator) doMinMax(minMax string) {
@@ -232,6 +239,8 @@ channelloop:
 		}
 
 	}
+	// drain the channel
+	sa.drainChannel()
 }
 
 func (sa *SmartAggregator) doFirst() {
@@ -279,6 +288,8 @@ channelloop:
 			window = sa.Column.WindowRelative[windowi]
 		}
 	}
+	// drain the channel
+	sa.drainChannel()
 }
 
 func (sa *SmartAggregator) doLast() {
@@ -316,6 +327,8 @@ channelloop:
 			sa.Column.Result[windowi] = val.Value
 		}
 	}
+	// drain the channel
+	sa.drainChannel()
 }
 
 func (sa *SmartAggregator) doPick() {
@@ -405,6 +418,8 @@ channelloop:
 			}
 		}
 	}
+	// drain the channel
+	sa.drainChannel()
 }
 
 // FUNCTIONS
