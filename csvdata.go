@@ -337,99 +337,107 @@ func CsvAggregateTable(cfg CsvAggregateTableConfigs) (SAResult, error) {
 	startREADEpoch := startTimeEpoch + lowestWindowRelative
 	endREADEpoch := endTimeEpoch + highestWindowRelative
 
-	// loop through the file configs
-	for _, filec := range cfg.FileConfigs {
-		wgfile.Add(1)
-		go func(filec *FileConfig) {
-			defer wgfile.Done()
-			coli := make(map[string]int, len(cfg.Requests))
+	fileproc := func(filec FileConfig) {
+		defer wgfile.Done()
+		coli := make(map[string]int, len(cfg.Requests))
 
-			// startTimeUTC os the start time in UTC, Starttime minus offset, and minus lowestWindowRelativeDur
-			startTimeREADUTC := cfg.StartTime.Add(-cfg.TimeOffsetDur).Add(lowestWindowRelativeDur)
-			startDateFile := GetNearestPastTimeUnit(startTimeREADUTC, filec.FileFrequency)
-			endTimeREADUTC := cfg.EndTime.Add(-cfg.TimeOffsetDur).Add(highestWindowRelativeDur)
-			endDateFile := GetNearestPastTimeUnit(endTimeREADUTC, filec.FileFrequency).Add(time.Duration(filec.FileFrequencyDur))
+		// startTimeUTC os the start time in UTC, Starttime minus offset, and minus lowestWindowRelativeDur
+		startTimeREADUTC := cfg.StartTime.Add(-cfg.TimeOffsetDur).Add(lowestWindowRelativeDur)
+		startDateFile := GetNearestPastTimeUnit(startTimeREADUTC, filec.FileFrequency)
+		endTimeREADUTC := cfg.EndTime.Add(-cfg.TimeOffsetDur).Add(highestWindowRelativeDur)
+		endDateFile := GetNearestPastTimeUnit(endTimeREADUTC, filec.FileFrequency).Add(time.Duration(filec.FileFrequencyDur))
 
-			// get the list of files dates
-			fdates := []time.Time{}
-			for d := startDateFile; d.Before(endDateFile); d = d.Add(time.Duration(filec.FileFrequencyDur)) {
-				fdates = append(fdates, d)
-			}
+		// get the list of files dates
+		fdates := []time.Time{}
+		for d := startDateFile; d.Before(endDateFile); d = d.Add(time.Duration(filec.FileFrequencyDur)) {
+			fdates = append(fdates, d)
+		}
 
-			// loop through the fdates
-			for _, day := range fdates {
-				func() {
-					// file name for the day
-					filename := day.Format(filec.FileNamingFormat)
+		// loop through the fdates
+		for _, day := range fdates {
+			func() {
+				// file name for the day
+				filename := day.Format(filec.FileNamingFormat)
 
-					// read the file
-					csvfile, err := os.Open(filename)
+				// read the file
+				csvfile, err := os.Open(filename)
+				if err != nil {
+					csvfile.Close()
+					return
+				}
+				defer csvfile.Close()
+
+				// read the file
+				reader := csv.NewReader(csvfile)
+
+				// get the column name
+				csvColNames, err := reader.Read()
+				if err != nil {
+					csvfile.Close()
+					return
+				}
+				for _, req := range cfg.Requests {
+					colfind := findString(csvColNames, req.InputColumnName)
+					if colfind == -1 {
+						continue
+					}
+					coli[req.InputColumnName] = colfind
+				}
+
+				// loop through the file
+			readloop:
+				for {
+					// read the line
+					line, err := reader.Read()
 					if err != nil {
-						csvfile.Close()
-						return
+						break readloop
 					}
-					defer csvfile.Close()
 
-					// read the file
-					reader := csv.NewReader(csvfile)
-
-					// get the column name
-					csvColNames, err := reader.Read()
+					// convert date
+					epochiter, err := strconv.ParseInt(line[0], 10, 64)
 					if err != nil {
-						csvfile.Close()
-						return
-					}
-					for _, req := range cfg.Requests {
-						coli[req.InputColumnName] = findString(csvColNames, req.InputColumnName)
+						continue readloop
 					}
 
-					// loop through the file
-				readloop:
-					for {
-						// read the line
-						line, err := reader.Read()
-						if err != nil {
+					// add offset
+					epochiter += cfg.TimeOffsetEp
+
+					// check if the epoch is within
+					if !IsBetween(startREADEpoch, endREADEpoch, epochiter) {
+						// check if the epoch is after the endREADEpoch
+						if epochiter > endREADEpoch {
 							break readloop
 						}
-
-						// convert date
-						epochiter, err := strconv.ParseInt(line[0], 10, 64)
-						if err != nil {
-							continue readloop
-						}
-
-						// add offset
-						epochiter += cfg.TimeOffsetEp
-
-						// check if the epoch is within
-						if !IsBetween(startREADEpoch, endREADEpoch, epochiter) {
-							// check if the epoch is after the endREADEpoch
-							if epochiter > endREADEpoch {
-								break readloop
-							}
-							continue readloop
-						}
-
-						// aggregate
-					reqloop:
-						for _, req := range cfg.Requests {
-							inpcolname := req.InputColumnName
-							colidx, ok := coli[inpcolname]
-							if !ok {
-								continue reqloop
-							}
-							datastr := line[colidx]
-							dataiter, err := strconv.ParseFloat(datastr, 64)
-							if err != nil {
-								continue reqloop
-							}
-							samap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
-						}
+						continue readloop
 					}
 
-				}()
-			}
-		}(&filec)
+					// aggregate
+				reqloop:
+					for _, req := range cfg.Requests {
+						inpcolname := req.InputColumnName
+						colidx, ok := coli[inpcolname]
+						if !ok {
+							continue reqloop
+						}
+						datastr := line[colidx]
+						dataiter, err := strconv.ParseFloat(datastr, 64)
+						if err != nil {
+							continue reqloop
+						}
+						samap[req.OutputColumnName].Data <- Input{Epoch: epochiter, Value: dataiter}
+					}
+				}
+
+			}()
+		}
+	}
+
+	// loop through the file configs
+	for _, filec := range cfg.FileConfigs {
+		// copy the file config
+		filectoproc := filec
+		wgfile.Add(1)
+		go fileproc(filectoproc)
 	}
 
 	// wait for all the file reader to finish
