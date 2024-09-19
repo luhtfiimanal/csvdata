@@ -10,6 +10,8 @@ const (
 	MEAN  = "mean"
 	MAX   = "max"
 	MIN   = "min"
+	IMAX  = "imax"
+	IMIN  = "imin"
 	LAST  = "last"
 	FIRST = "first"
 	PICK  = "pick"

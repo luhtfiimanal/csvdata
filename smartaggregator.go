@@ -84,6 +84,12 @@ func (sa *SmartAggregator) Do(wg *sync.WaitGroup) {
 	case MIN:
 		sa.Column.makeWindow()
 		sa.doMinMax(sa.Agg)
+	case IMAX:
+		sa.Column.makeWindow()
+		sa.doIndexMinMax(sa.Agg)
+	case IMIN:
+		sa.Column.makeWindow()
+		sa.doIndexMinMax(sa.Agg)
 	case FIRST:
 		sa.Column.makeWindow()
 		sa.doFirst()
@@ -240,6 +246,75 @@ channelloop:
 
 	}
 	// drain the channel
+	sa.drainChannel()
+}
+
+func (sa *SmartAggregator) doIndexMinMax(indexMinMax string) {
+	// Make all result NaN
+	for i := range sa.Column.Result {
+		sa.Column.Result[i] = math.NaN()
+	}
+
+	var result float64
+	var resultTimestamp float64
+
+	if indexMinMax == IMIN {
+		result = math.MaxFloat64
+	} else if indexMinMax == IMAX {
+		result = -math.MaxFloat64
+	}
+
+	savefunc := func(i int) {
+		if result == -math.MaxFloat64 || result == math.MaxFloat64 {
+			sa.Column.Result[i] = math.NaN()
+		} else {
+			sa.Column.Result[i] = resultTimestamp
+		}
+	}
+
+	windowi := 0
+	window := sa.Column.WindowRelative[windowi]
+
+channelloop:
+	for {
+		val, ok := <-sa.Data
+		if !ok {
+			savefunc(windowi)
+			break channelloop
+		}
+
+		if val.Epoch >= window[0] && val.Epoch <= window[1] {
+			if indexMinMax == IMIN && val.Value < result {
+				result = val.Value
+				resultTimestamp = float64(val.Epoch)
+			} else if indexMinMax == IMAX && val.Value > result {
+				result = val.Value
+				resultTimestamp = float64(val.Epoch)
+			}
+		} else if val.Epoch > window[1] {
+			savefunc(windowi)
+
+			for val.Epoch > window[1] {
+				windowi++
+				if windowi >= len(sa.Column.WindowRelative) {
+					break channelloop
+				}
+				window = sa.Column.WindowRelative[windowi]
+			}
+
+			if val.Epoch >= window[0] && val.Epoch <= window[1] {
+				result = val.Value
+				resultTimestamp = float64(val.Epoch)
+			} else {
+				if indexMinMax == IMIN {
+					result = math.MaxFloat64
+				} else if indexMinMax == IMAX {
+					result = -math.MaxFloat64
+				}
+				resultTimestamp = math.NaN()
+			}
+		}
+	}
 	sa.drainChannel()
 }
 

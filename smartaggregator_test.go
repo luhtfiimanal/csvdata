@@ -164,6 +164,8 @@ func TestSmartAggregator(t *testing.T) {
 		{"MIN", csvdata.MIN, inputs, windowrelative, []float64{2, 4, 8}},
 		{"FIRST", csvdata.FIRST, inputs, windowrelative, []float64{2, 4, 8}},
 		{"LAST", csvdata.LAST, inputs, windowrelative, []float64{3, 6, 10}},
+		{"IMAX", csvdata.IMAX, inputs, windowrelative, []float64{3, 6, 10}},
+		{"IMIN", csvdata.IMIN, inputs, windowrelative, []float64{2, 4, 8}},
 	}
 
 	for _, tt := range tests {
