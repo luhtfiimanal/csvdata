@@ -99,6 +99,9 @@ func (sa *SmartAggregator) Do(wg *sync.WaitGroup) {
 	case PICK:
 		sa.Column.makePickRelative()
 		sa.doPick()
+	case WINDIRMAX8: // New case added here :)
+		sa.Column.makeWindow()
+		sa.doWindirMax8() // We'll implement this function next.
 	}
 }
 func (sa *SmartAggregator) doSumCountMean(agg string) {
@@ -494,6 +497,80 @@ channelloop:
 		}
 	}
 	// drain the channel
+	sa.drainChannel()
+}
+
+func (sa *SmartAggregator) doWindirMax8() {
+	// Initialize the result to NaN
+	for i := range sa.Column.Result {
+		sa.Column.Result[i] = math.NaN()
+	}
+
+	// Initialize bins for storing frequency of wind directions
+	bins := make([]int, 8) // 8 bins for each direction (0: N, 1: NE, ..., 7: NW)
+
+	windowi := 0
+	window := sa.Column.WindowRelative[windowi]
+
+channelloop:
+	for {
+		val, ok := <-sa.Data
+		// Check if channel is closed
+		if !ok {
+			// Find the most occurred direction for each window when data is exhausted
+			var maxBinIdx int
+			maxFrequency := 0
+			for i, count := range bins {
+				if count > maxFrequency {
+					maxFrequency = count
+					maxBinIdx = i
+				}
+			}
+			// Set the bin result based on maxBinIdx
+			sa.Column.Result[windowi] = float64(maxBinIdx) * 45 // Convert bin to angle
+			break channelloop
+		}
+
+		// Classify the wind direction and increment the respective bin frequency
+		classifiedDir := ClassifyWindDirection(val.Value) // This will be one of {0, 45, 90, ..., 315}
+		binIndex := int(classifiedDir / 45)               // Map angle to bin index (0: N, 1: NE, ..., 7: NW)
+		bins[binIndex]++
+
+		// If we are past the current window, aggregate the result
+		if val.Epoch > window[1] {
+			// Find the most frequent bin
+			var maxBinIdx int
+			maxFrequency := 0
+			for i, count := range bins {
+				if count > maxFrequency {
+					maxFrequency = count
+					maxBinIdx = i
+				}
+			}
+
+			// Store the result for this window
+			sa.Column.Result[windowi] = float64(maxBinIdx) * 45
+
+			// Reset bins for the next window
+			bins = make([]int, 8)
+
+			// Move forward to the next window
+			for val.Epoch > window[1] {
+				windowi++
+				if windowi >= len(sa.Column.WindowRelative) {
+					break channelloop
+				}
+				window = sa.Column.WindowRelative[windowi]
+			}
+
+			// Process the data for the next window
+			classifiedDir = ClassifyWindDirection(val.Value)
+			binIndex = int(classifiedDir / 45)
+			bins[binIndex]++
+		}
+	}
+
+	// Drain the channel if there are leftover values
 	sa.drainChannel()
 }
 

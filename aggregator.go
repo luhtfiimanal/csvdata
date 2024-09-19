@@ -5,16 +5,17 @@ import (
 )
 
 const (
-	SUM   = "sum"
-	COUNT = "count"
-	MEAN  = "mean"
-	MAX   = "max"
-	MIN   = "min"
-	IMAX  = "imax"
-	IMIN  = "imin"
-	LAST  = "last"
-	FIRST = "first"
-	PICK  = "pick"
+	SUM        = "sum"
+	COUNT      = "count"
+	MEAN       = "mean"
+	MAX        = "max"
+	MIN        = "min"
+	IMAX       = "imax"
+	IMIN       = "imin"
+	LAST       = "last"
+	FIRST      = "first"
+	PICK       = "pick"
+	WINDIRMAX8 = "windirmax8"
 )
 
 func NewAggregator(agg string) *Aggregator {

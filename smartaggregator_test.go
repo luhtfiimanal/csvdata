@@ -201,3 +201,57 @@ func TestSmartAggregator(t *testing.T) {
 		})
 	}
 }
+
+// TestSmartAggregatorWindDirMax8 tests that the SmartAggregator correctly finds the most frequent wind direction bin.
+func TestSmartAggregatorWindDirMax8(t *testing.T) {
+	// Prepare the input data (wind directions in degrees)
+	inputData := []csvdata.Input{
+		{Epoch: 0, Value: 0},     // N
+		{Epoch: 1, Value: 50.1},  // NE
+		{Epoch: 2, Value: 90},    // E
+		{Epoch: 3, Value: 135},   // SE
+		{Epoch: 4, Value: 180},   // S
+		{Epoch: 5, Value: 225},   // SW
+		{Epoch: 6, Value: 270},   // W
+		{Epoch: 7, Value: 292.5}, // NW
+		{Epoch: 8, Value: 31},    // NE
+		{Epoch: 9, Value: 22.7},  // NE
+	}
+
+	// We expect NE (45) to be the most frequent bin because it appears 3 times.
+
+	// Set up aggregation with window spanning all epoch data
+	col := &csvdata.SAColumn{
+		OutputColumnName: "windirmax8",
+		TimeResultEp:     &[]int64{0, 10}, // Just one big time window
+		WindowRelativeEp: [2]int64{0, 10}, // Relative window
+		Result:           make([]float64, 1),
+	}
+
+	// Create the smart aggregator for WINDIRMAX8
+	var wg sync.WaitGroup
+	wg.Add(1)
+	agg := csvdata.NewSmartAggregator(csvdata.WINDIRMAX8, col, &wg)
+
+	// Send the input data to the aggregator
+	go func() {
+		for _, data := range inputData {
+			agg.Data <- data
+		}
+		// Close the channel after sending all the data
+		close(agg.Data)
+	}()
+
+	// Wait for the aggregator to finish
+	wg.Wait()
+
+	// Check if the result is as expected (most frequent bin -> NE -> 45 degrees)
+	expected := 45.0
+	result := col.Result[0]
+
+	if result != expected {
+		t.Errorf("WINDIRMAX8 Agg failed: expected %.1f, got %.1f", expected, result)
+	} else {
+		t.Logf("WINDIRMAX8 Agg passed: got %.1f", result)
+	}
+}
