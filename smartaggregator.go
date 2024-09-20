@@ -390,19 +390,25 @@ channelloop:
 
 		// Check if the data is in the window
 		if val.Epoch >= window[0] && val.Epoch <= window[1] {
-			// store the last value
+			// store the last value for that window
 			sa.Column.Result[windowi] = val.Value
 		} else if val.Epoch > window[1] {
-			// loop through the windows until the epoch is in the window
+			// skip forward to next window
 			for val.Epoch > window[1] {
 				windowi++
 				if windowi >= len(sa.Column.WindowRelative) {
 					break channelloop
 				}
 				window = sa.Column.WindowRelative[windowi]
+
+				// Ensure that we reset for new windows and don't carry an old value over
+				sa.Column.Result[windowi] = math.NaN()
 			}
-			// store the first value and move to the next window
-			sa.Column.Result[windowi] = val.Value
+
+			// If still within the new window, store the last value
+			if val.Epoch >= window[0] && val.Epoch <= window[1] {
+				sa.Column.Result[windowi] = val.Value
+			}
 		}
 	}
 	// drain the channel

@@ -2,6 +2,7 @@ package csvdata_test
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 
@@ -253,5 +254,79 @@ func TestSmartAggregatorWindDirMax8(t *testing.T) {
 		t.Errorf("WINDIRMAX8 Agg failed: expected %.1f, got %.1f", expected, result)
 	} else {
 		t.Logf("WINDIRMAX8 Agg passed: got %.1f", result)
+	}
+}
+
+// TestSmartLastWithWindowString tests the 'LAST' method of SmartAggregator with an explicit window string
+func TestSmartLastWithWindowString(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Time epochs and windows for testing
+	timeResultEp := []int64{10, 20, 30}
+	windowRelativeEp := [][2]int64{
+		{6, 10},  // Between 6 to 10
+		{16, 20}, // Between 16 to 20
+		{26, 30}, // Between 26 to 30
+	}
+
+	// Prepare the SAColumn
+	reqcolumn := csvdata.SAColumn{
+		OutputColumnName: "last_value",
+		TimeResultEp:     &timeResultEp,
+		WindowRelativeEp: [2]int64{-4, 0},
+		WindowRelative:   windowRelativeEp, // Explicit window for testing
+		Result:           make([]float64, len(timeResultEp)),
+	}
+
+	// Initiate the SmartAggregator with the LAST method
+	sa := csvdata.NewSmartAggregator(csvdata.LAST, &reqcolumn, &wg)
+
+	expected := []float64{
+		7,          // Latest value within window [-4, 0] for first timeResultEp: epoch between 6 and 10
+		math.NaN(), // No data in the second window
+		27,         // Latest value within window [-4, 0] for third timeResultEp: epoch between 26 and 30
+	}
+
+	// Input data
+	data := []csvdata.Input{
+		{Epoch: 1, Value: 1},
+		{Epoch: 3, Value: 3},
+		{Epoch: 7, Value: 7},   // Last value in the first window
+		{Epoch: 11, Value: 11}, // Last value in the first window
+		{Epoch: 15, Value: 15}, // Outside the second window
+		{Epoch: 21, Value: 21}, // Outside the second window
+		{Epoch: 27, Value: 27}, // Last value in the third window
+	}
+
+	// Pass the data to the aggregator
+	go func() {
+		for _, d := range data {
+			// DEBUG: log each data point being sent
+			t.Logf("Sending Epoch: %d, Value: %f", d.Epoch, d.Value)
+			sa.Data <- d
+		}
+		// Close the channel
+		close(sa.Data)
+	}()
+
+	// Wait for the aggregation to complete
+	wg.Wait()
+
+	// DEBUG: Log the window boundaries for sanity check
+	for i, win := range sa.Column.WindowRelative {
+		t.Logf("Window %d: [%d, %d]", i, win[0], win[1])
+	}
+
+	// Check the results
+	for i, v := range sa.Column.Result {
+		if math.IsNaN(expected[i]) {
+			// Test that NaN is produced where we expect it
+			if !math.IsNaN(v) {
+				t.Errorf("Expected NaN at index %d, got %v", i, v)
+			}
+		} else if expected[i] != v {
+			t.Errorf("Expected %v at index %d, got %v", expected[i], i, v)
+		}
 	}
 }
